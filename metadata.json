@@ -1,0 +1,6 @@
+{
+  "name": "LENSWORKS — Precision Camera Service",
+  "description": "Minimal, luxury editorial website for LENSWORKS, a precision camera repair and servicing studio.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
