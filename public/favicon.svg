@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="16" fill="#111111" />
+  <!-- Camera body -->
+  <path d="M18 25C18 23.3431 19.3431 22 21 22H24.5C25.2956 22 26.0587 21.6839 26.6213 21.1213L28.1213 19.6213C28.6839 19.0587 29.4444 18.7426 30.24 18.7426H33.76C34.5556 18.7426 35.3161 19.0587 35.8787 19.6213L37.3787 21.1213C37.9413 21.6839 38.7044 22 39.5 22H43C44.6569 22 46 23.3431 46 25V42C46 43.6569 44.6569 45 43 45H21C19.3431 45 18 43.6569 18 42V25Z" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" />
+  <!-- Central optical lens -->
+  <circle cx="32" cy="33.5" r="6.8" stroke="#FFFFFF" stroke-width="3.2" fill="none" />
+  <!-- Sensor / aperture point -->
+  <circle cx="32" cy="33.5" r="2.2" fill="#FFFFFF" />
+  <!-- Small viewfinder dot -->
+  <circle cx="41" cy="26.5" r="1.4" fill="#FFFFFF" />
+</svg>
