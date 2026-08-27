@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { motion } from 'motion/react';
 
 interface HeroProps {
@@ -13,69 +13,116 @@ type CameraState = 'assembled' | 'opening' | 'exploded' | 'assembling';
 export const Hero: React.FC<HeroProps> = () => {
   const forwardVideoRef = useRef<HTMLVideoElement>(null);
   const reverseVideoRef = useRef<HTMLVideoElement>(null);
-  
+
   const [cameraState, setCameraState] = useState<CameraState>('assembled');
   const [activeTrack, setActiveTrack] = useState<'forward' | 'reverse'>('forward');
-  const [forwardLoaded, setForwardLoaded] = useState(false);
-  const [reverseLoaded, setReverseLoaded] = useState(false);
+
+  // Ensure DOM video elements are muted for browser autoplay policies
+  useEffect(() => {
+    if (forwardVideoRef.current) {
+      forwardVideoRef.current.muted = true;
+      forwardVideoRef.current.defaultMuted = true;
+      forwardVideoRef.current.playsInline = true;
+    }
+    if (reverseVideoRef.current) {
+      reverseVideoRef.current.muted = true;
+      reverseVideoRef.current.defaultMuted = true;
+      reverseVideoRef.current.playsInline = true;
+    }
+  }, []);
+
+  // When forward video completes opening
+  const handleForwardEnded = useCallback(() => {
+    setCameraState('exploded');
+    if (forwardVideoRef.current) {
+      forwardVideoRef.current.pause();
+    }
+  }, []);
+
+  // When reverse video completes assembly
+  const handleReverseEnded = useCallback(() => {
+    setCameraState('assembled');
+    if (reverseVideoRef.current) {
+      reverseVideoRef.current.pause();
+    }
+    if (forwardVideoRef.current) {
+      forwardVideoRef.current.currentTime = 0;
+    }
+  }, []);
 
   // Play forward (Teardown / Open)
-  const handleOpen = () => {
-    if (cameraState === 'opening' || cameraState === 'exploded') return;
-    
+  const handleOpen = useCallback(() => {
+    if (cameraState === 'exploded' || cameraState === 'opening') return;
+
     setActiveTrack('forward');
     setCameraState('opening');
 
-    if (forwardVideoRef.current) {
-      forwardVideoRef.current.currentTime = 0;
-      forwardVideoRef.current.play().catch(() => {});
+    if (reverseVideoRef.current) {
+      reverseVideoRef.current.pause();
     }
-  };
 
-  // Play reverse (Re-assemble / Assemble) - Uses native forward playback on the reversed video for 60fps silky-smooth animation
-  const handleAssemble = () => {
-    if (cameraState === 'assembling' || cameraState === 'assembled') return;
+    if (forwardVideoRef.current) {
+      forwardVideoRef.current.muted = true;
+      forwardVideoRef.current.currentTime = 0;
+      const playPromise = forwardVideoRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn('Forward video play:', err);
+        });
+      }
+    }
+  }, [cameraState]);
+
+  // Play reverse (Re-assemble / Assemble)
+  const handleAssemble = useCallback(() => {
+    if (cameraState === 'assembled' || cameraState === 'assembling') return;
 
     setActiveTrack('reverse');
     setCameraState('assembling');
 
-    if (reverseVideoRef.current) {
-      reverseVideoRef.current.currentTime = 0;
-      reverseVideoRef.current.play().catch(() => {});
-    }
-  };
-
-  // When forward video completes opening
-  const handleForwardEnded = () => {
-    setCameraState('exploded');
-    if (reverseVideoRef.current) {
-      reverseVideoRef.current.currentTime = 0;
-    }
-  };
-
-  // When reverse video completes assembly
-  const handleReverseEnded = () => {
-    setCameraState('assembled');
     if (forwardVideoRef.current) {
-      forwardVideoRef.current.currentTime = 0;
+      forwardVideoRef.current.pause();
+    }
+
+    if (reverseVideoRef.current) {
+      reverseVideoRef.current.muted = true;
+      reverseVideoRef.current.currentTime = 0;
+      const playPromise = reverseVideoRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn('Reverse video play:', err);
+        });
+      }
+    }
+  }, [cameraState]);
+
+  // Safety fallback using timeupdate
+  const handleForwardTimeUpdate = () => {
+    if (forwardVideoRef.current && cameraState === 'opening') {
+      const dur = forwardVideoRef.current.duration;
+      if (dur && dur > 0 && forwardVideoRef.current.currentTime >= dur - 0.08) {
+        handleForwardEnded();
+      }
     }
   };
 
-  useEffect(() => {
-    // Preload both video tracks
-    if (forwardVideoRef.current) forwardVideoRef.current.load();
-    if (reverseVideoRef.current) reverseVideoRef.current.load();
-  }, []);
+  const handleReverseTimeUpdate = () => {
+    if (reverseVideoRef.current && cameraState === 'assembling') {
+      const dur = reverseVideoRef.current.duration;
+      if (dur && dur > 0 && reverseVideoRef.current.currentTime >= dur - 0.08) {
+        handleReverseEnded();
+      }
+    }
+  };
 
-  const isTransitioning = cameraState === 'opening' || cameraState === 'assembling';
-  const isExploded = cameraState === 'exploded' || cameraState === 'assembling';
+  const isExploded = cameraState === 'exploded' || cameraState === 'opening';
 
   return (
     <section
       id="hero"
       className="relative w-full h-screen min-h-[660px] flex flex-col justify-between overflow-hidden select-none"
     >
-      {/* FULL-BLEED BACKGROUND VIDEO: Dual 60fps hardware-accelerated video layers */}
+      {/* FULL-BLEED BACKGROUND VIDEO: Dual hardware-accelerated 60fps video tracks */}
       <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
         {/* Forward Video (Open Animation) */}
         <video
@@ -84,28 +131,28 @@ export const Hero: React.FC<HeroProps> = () => {
           muted
           playsInline
           preload="auto"
-          onLoadedData={() => setForwardLoaded(true)}
           onEnded={handleForwardEnded}
+          onTimeUpdate={handleForwardTimeUpdate}
           aria-label="Camera opening teardown animation"
           className={`absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-300 ${
-            activeTrack === 'forward' && forwardLoaded ? 'opacity-100 z-10' : 'opacity-0 z-0'
+            activeTrack === 'forward' ? 'opacity-100 z-10' : 'opacity-0 z-0'
           }`}
         >
           <source src="/hero-video.mp4" type="video/mp4" />
         </video>
 
-        {/* Reverse Video (Assemble Animation - 100% smooth forward playback of reversed clip) */}
+        {/* Reverse Video (Assemble Animation) */}
         <video
           ref={reverseVideoRef}
           id="hero-reverse-video"
           muted
           playsInline
           preload="auto"
-          onLoadedData={() => setReverseLoaded(true)}
           onEnded={handleReverseEnded}
+          onTimeUpdate={handleReverseTimeUpdate}
           aria-label="Camera assembly animation"
           className={`absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-300 ${
-            activeTrack === 'reverse' && reverseLoaded ? 'opacity-100 z-10' : 'opacity-0 z-0'
+            activeTrack === 'reverse' ? 'opacity-100 z-10' : 'opacity-0 z-0'
           }`}
         >
           <source src="/hero-video-reverse.mp4" type="video/mp4" />
@@ -129,7 +176,7 @@ export const Hero: React.FC<HeroProps> = () => {
             </h1>
           </motion.div>
 
-          {/* Supporting copy: Permanently White with soft drop shadow */}
+          {/* Supporting copy: Crisp White with soft drop shadow */}
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
@@ -143,27 +190,24 @@ export const Hero: React.FC<HeroProps> = () => {
         </div>
       </div>
 
-      {/* 03 — INTERACTIVE OPEN / ASSEMBLE CONTROLS (Hover-activated & seated at base of camera) */}
+      {/* 03 — INTERACTIVE OPEN / ASSEMBLE CONTROLS (Hover & Click activated) */}
       <div className="relative z-20 mt-auto mb-10 sm:mb-14 md:mb-16 flex flex-col items-center justify-center w-full">
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.25 }}
-          className={`flex items-center justify-center gap-3 sm:gap-4 transition-opacity duration-300 ${
-            isTransitioning ? 'opacity-70 pointer-events-none' : 'opacity-100'
-          }`}
+          className="flex items-center justify-center gap-3 sm:gap-4"
         >
           {/* OPEN Button */}
           <button
             id="hero-control-open"
             onMouseEnter={handleOpen}
             onClick={handleOpen}
-            disabled={isTransitioning}
             aria-label="Open camera exploded view"
             className={`group px-4 sm:px-5 py-2 rounded-full text-[11px] sm:text-xs font-mono uppercase tracking-[0.2em] font-bold transition-all duration-200 cursor-pointer flex items-center gap-1.5 border shadow-sm ${
               !isExploded
-                ? 'bg-[#111111] text-white border-[#111111] shadow-md'
-                : 'bg-white/95 backdrop-blur-sm text-[#111111] hover:text-black border-black/30 hover:border-black shadow-2xs'
+                ? 'bg-[#111111] text-white border-[#111111] shadow-md hover:bg-black'
+                : 'bg-white/95 backdrop-blur-sm text-[#111111] hover:text-black border-black/30 hover:border-black shadow-2xs hover:bg-white'
             }`}
           >
             <span>OPEN</span>
@@ -175,12 +219,11 @@ export const Hero: React.FC<HeroProps> = () => {
             id="hero-control-assemble"
             onMouseEnter={handleAssemble}
             onClick={handleAssemble}
-            disabled={isTransitioning}
             aria-label="Assemble camera components"
             className={`group px-4 sm:px-5 py-2 rounded-full text-[11px] sm:text-xs font-mono uppercase tracking-[0.2em] font-bold transition-all duration-200 cursor-pointer flex items-center gap-1.5 border shadow-sm ${
               isExploded
-                ? 'bg-[#111111] text-white border-[#111111] shadow-md'
-                : 'bg-white/95 backdrop-blur-sm text-[#111111] hover:text-black border-black/30 hover:border-black shadow-2xs'
+                ? 'bg-[#111111] text-white border-[#111111] shadow-md hover:bg-black'
+                : 'bg-white/95 backdrop-blur-sm text-[#111111] hover:text-black border-black/30 hover:border-black shadow-2xs hover:bg-white'
             }`}
           >
             <span className="text-[10px] transition-transform duration-200 group-hover:-translate-x-0.5">←</span>
@@ -199,3 +242,4 @@ export const Hero: React.FC<HeroProps> = () => {
     </section>
   );
 };
+
