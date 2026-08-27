@@ -17,17 +17,24 @@ export const Hero: React.FC<HeroProps> = () => {
   const [cameraState, setCameraState] = useState<CameraState>('assembled');
   const [activeTrack, setActiveTrack] = useState<'forward' | 'reverse'>('forward');
 
-  // Ensure DOM video elements are muted for browser autoplay policies
+  // Initialize both video elements on mount
   useEffect(() => {
-    if (forwardVideoRef.current) {
-      forwardVideoRef.current.muted = true;
-      forwardVideoRef.current.defaultMuted = true;
-      forwardVideoRef.current.playsInline = true;
+    const fv = forwardVideoRef.current;
+    const rv = reverseVideoRef.current;
+
+    if (fv) {
+      fv.muted = true;
+      fv.defaultMuted = true;
+      fv.playsInline = true;
+      fv.preload = 'auto';
+      fv.load();
     }
-    if (reverseVideoRef.current) {
-      reverseVideoRef.current.muted = true;
-      reverseVideoRef.current.defaultMuted = true;
-      reverseVideoRef.current.playsInline = true;
+    if (rv) {
+      rv.muted = true;
+      rv.defaultMuted = true;
+      rv.playsInline = true;
+      rv.preload = 'auto';
+      rv.load();
     }
   }, []);
 
@@ -52,8 +59,6 @@ export const Hero: React.FC<HeroProps> = () => {
 
   // Play forward (Teardown / Open)
   const handleOpen = useCallback(() => {
-    if (cameraState === 'exploded' || cameraState === 'opening') return;
-
     setActiveTrack('forward');
     setCameraState('opening');
 
@@ -62,21 +67,20 @@ export const Hero: React.FC<HeroProps> = () => {
     }
 
     if (forwardVideoRef.current) {
-      forwardVideoRef.current.muted = true;
-      forwardVideoRef.current.currentTime = 0;
-      const playPromise = forwardVideoRef.current.play();
+      const fv = forwardVideoRef.current;
+      fv.muted = true;
+      fv.currentTime = 0;
+      const playPromise = fv.play();
       if (playPromise !== undefined) {
         playPromise.catch((err) => {
           console.warn('Forward video play:', err);
         });
       }
     }
-  }, [cameraState]);
+  }, []);
 
   // Play reverse (Re-assemble / Assemble)
   const handleAssemble = useCallback(() => {
-    if (cameraState === 'assembled' || cameraState === 'assembling') return;
-
     setActiveTrack('reverse');
     setCameraState('assembling');
 
@@ -85,16 +89,17 @@ export const Hero: React.FC<HeroProps> = () => {
     }
 
     if (reverseVideoRef.current) {
-      reverseVideoRef.current.muted = true;
-      reverseVideoRef.current.currentTime = 0;
-      const playPromise = reverseVideoRef.current.play();
+      const rv = reverseVideoRef.current;
+      rv.muted = true;
+      rv.currentTime = 0;
+      const playPromise = rv.play();
       if (playPromise !== undefined) {
         playPromise.catch((err) => {
           console.warn('Reverse video play:', err);
         });
       }
     }
-  }, [cameraState]);
+  }, []);
 
   // Safety fallback using timeupdate
   const handleForwardTimeUpdate = () => {
@@ -128,35 +133,33 @@ export const Hero: React.FC<HeroProps> = () => {
         <video
           ref={forwardVideoRef}
           id="hero-forward-video"
+          src="/hero-video.mp4"
           muted
           playsInline
           preload="auto"
           onEnded={handleForwardEnded}
           onTimeUpdate={handleForwardTimeUpdate}
           aria-label="Camera opening teardown animation"
-          className={`absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-300 ${
+          className={`absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-200 ${
             activeTrack === 'forward' ? 'opacity-100 z-10' : 'opacity-0 z-0'
           }`}
-        >
-          <source src="/hero-video.mp4" type="video/mp4" />
-        </video>
+        />
 
         {/* Reverse Video (Assemble Animation) */}
         <video
           ref={reverseVideoRef}
           id="hero-reverse-video"
+          src="/hero-video-reverse.mp4"
           muted
           playsInline
           preload="auto"
           onEnded={handleReverseEnded}
           onTimeUpdate={handleReverseTimeUpdate}
           aria-label="Camera assembly animation"
-          className={`absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-300 ${
+          className={`absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-200 ${
             activeTrack === 'reverse' ? 'opacity-100 z-10' : 'opacity-0 z-0'
           }`}
-        >
-          <source src="/hero-video-reverse.mp4" type="video/mp4" />
-        </video>
+        />
       </div>
 
       {/* 02 — EDITORIAL HEADLINE (Top Left) & SUPPORTING COPY (Permanent Crisp White) */}
@@ -203,8 +206,9 @@ export const Hero: React.FC<HeroProps> = () => {
             id="hero-control-open"
             onMouseEnter={handleOpen}
             onClick={handleOpen}
+            onPointerDown={handleOpen}
             aria-label="Open camera exploded view"
-            className={`group px-4 sm:px-5 py-2 rounded-full text-[11px] sm:text-xs font-mono uppercase tracking-[0.2em] font-bold transition-all duration-200 cursor-pointer flex items-center gap-1.5 border shadow-sm ${
+            className={`group px-5 sm:px-6 py-2.5 rounded-full text-[11px] sm:text-xs font-mono uppercase tracking-[0.2em] font-bold transition-all duration-200 cursor-pointer flex items-center gap-1.5 border shadow-sm active:scale-95 ${
               !isExploded
                 ? 'bg-[#111111] text-white border-[#111111] shadow-md hover:bg-black'
                 : 'bg-white/95 backdrop-blur-sm text-[#111111] hover:text-black border-black/30 hover:border-black shadow-2xs hover:bg-white'
@@ -219,8 +223,9 @@ export const Hero: React.FC<HeroProps> = () => {
             id="hero-control-assemble"
             onMouseEnter={handleAssemble}
             onClick={handleAssemble}
+            onPointerDown={handleAssemble}
             aria-label="Assemble camera components"
-            className={`group px-4 sm:px-5 py-2 rounded-full text-[11px] sm:text-xs font-mono uppercase tracking-[0.2em] font-bold transition-all duration-200 cursor-pointer flex items-center gap-1.5 border shadow-sm ${
+            className={`group px-5 sm:px-6 py-2.5 rounded-full text-[11px] sm:text-xs font-mono uppercase tracking-[0.2em] font-bold transition-all duration-200 cursor-pointer flex items-center gap-1.5 border shadow-sm active:scale-95 ${
               isExploded
                 ? 'bg-[#111111] text-white border-[#111111] shadow-md hover:bg-black'
                 : 'bg-white/95 backdrop-blur-sm text-[#111111] hover:text-black border-black/30 hover:border-black shadow-2xs hover:bg-white'
@@ -242,4 +247,5 @@ export const Hero: React.FC<HeroProps> = () => {
     </section>
   );
 };
+
 
