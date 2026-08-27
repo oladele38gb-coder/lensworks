@@ -32,45 +32,47 @@ export const Hero: React.FC<HeroProps> = () => {
     }
   };
 
-  // Play reverse (Re-assemble / Assemble)
+  // Play reverse (Re-assemble / Assemble) - Optimized 30fps steady-rate reverse loop for silky-smooth decoding
   const handleAssemble = () => {
     if (cameraState === 'assembling' || cameraState === 'assembled') return;
+    const video = videoRef.current;
+    if (!video) return;
 
-    if (videoRef.current) {
-      setCameraState('assembling');
-      videoRef.current.pause();
+    setCameraState('assembling');
+    video.pause();
 
-      if (reverseAnimRef.current) {
-        cancelAnimationFrame(reverseAnimRef.current);
-      }
+    if (reverseAnimRef.current) {
+      cancelAnimationFrame(reverseAnimRef.current);
+      reverseAnimRef.current = null;
+    }
 
-      let lastTime = performance.now();
-      const reverseSpeed = 1.35;
+    const stepInterval = 1000 / 30; // ~33ms per step (30fps) to prevent hardware decoder stall
+    const stepAmount = 0.045; // smooth decrement
+    let lastStepTime = performance.now();
 
-      const stepReverse = (now: number) => {
-        const delta = (now - lastTime) / 1000;
-        lastTime = now;
+    const reverseLoop = (now: number) => {
+      if (!video) return;
 
-        if (videoRef.current) {
-          if (videoRef.current.currentTime > 0.04) {
-            videoRef.current.currentTime = Math.max(
-              0,
-              videoRef.current.currentTime - delta * reverseSpeed
-            );
-            reverseAnimRef.current = requestAnimationFrame(stepReverse);
-          } else {
-            videoRef.current.currentTime = 0;
-            setCameraState('assembled');
-            if (reverseAnimRef.current) {
-              cancelAnimationFrame(reverseAnimRef.current);
-              reverseAnimRef.current = null;
-            }
+      if (now - lastStepTime >= stepInterval) {
+        lastStepTime = now;
+
+        if (video.currentTime > 0.04) {
+          video.currentTime = Math.max(0, video.currentTime - stepAmount);
+          reverseAnimRef.current = requestAnimationFrame(reverseLoop);
+        } else {
+          video.currentTime = 0;
+          setCameraState('assembled');
+          if (reverseAnimRef.current) {
+            cancelAnimationFrame(reverseAnimRef.current);
+            reverseAnimRef.current = null;
           }
         }
-      };
+      } else {
+        reverseAnimRef.current = requestAnimationFrame(reverseLoop);
+      }
+    };
 
-      reverseAnimRef.current = requestAnimationFrame(stepReverse);
-    }
+    reverseAnimRef.current = requestAnimationFrame(reverseLoop);
   };
 
   // Track video progress to transition to 'exploded' at the end of the forward clip
@@ -94,6 +96,7 @@ export const Hero: React.FC<HeroProps> = () => {
 
   const isTransitioning = cameraState === 'opening' || cameraState === 'assembling';
   const isExploded = cameraState === 'exploded' || cameraState === 'assembling';
+  const isTextWhite = cameraState === 'opening' || cameraState === 'exploded';
 
   return (
     <section
@@ -136,21 +139,27 @@ export const Hero: React.FC<HeroProps> = () => {
             </h1>
           </motion.div>
 
-          {/* Supporting copy (Dragged down by ~3-4 inches / mt-24 sm:mt-32 md:mt-40, and Book a Repair removed) */}
+          {/* Supporting copy (Dynamically transitions to white when camera is open, black when assembling/closed) */}
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
             className="max-w-xs md:text-right mt-16 sm:mt-24 md:mt-32 ml-auto"
           >
-            <p className="text-xs sm:text-sm text-[#111111]/90 font-medium leading-relaxed">
+            <p
+              className={`text-xs sm:text-sm font-medium leading-relaxed transition-colors duration-500 ${
+                isTextWhite
+                  ? 'text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]'
+                  : 'text-[#111111]/90'
+              }`}
+            >
               Precision camera repair for the equipment behind your best work.
             </p>
           </motion.div>
         </div>
       </div>
 
-      {/* 03 — INTERACTIVE OPEN / ASSEMBLE CONTROLS (Dragged down ~3 inches / seated at base of camera) */}
+      {/* 03 — INTERACTIVE OPEN / ASSEMBLE CONTROLS (Hover-activated & seated at base of camera) */}
       <div className="relative z-10 mt-auto mb-10 sm:mb-14 md:mb-16 flex flex-col items-center justify-center w-full">
         <motion.div
           initial={{ opacity: 0, y: 15 }}
